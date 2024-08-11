@@ -1,0 +1,88 @@
+name: Auto PR
+on:
+  push:
+    branches:
+      - dev
+      - release
+
+concurrency:
+  group: auto_pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  to_dev:
+    name: Create PR from dev->release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: dev
+      - name: Create PR from dev->release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_FROM: dev
+          BRANCH_TO: release
+        run: |
+          pr_number=$(gh pr list --base $BRANCH_TO --head $BRANCH_FROM --json number -q '.[0].number')
+          if [ -z "$pr_number" ]; then
+              echo "No Dev->Release PR found"
+              gh pr create --base $BRANCH_TO --head $BRANCH_FROM --label "TriggerCI,RunAllTests" --title "Dev -> Release" --body " "
+              pr_number=$(gh pr list --base $BRANCH_TO --head $BRANCH_FROM --json number -q '.[0].number')
+          else
+              echo "Dev -> Release is already present"
+          fi
+
+
+          # Fetch JSON data using the gh command
+          json_data=$(gh pr view $pr_number --json commits)
+
+          header=$(printf "| PR | Author | Description |\n| :---: | :--- | :--- |")
+
+          # Use jq to parse JSON and extract required fields, then format them into table rows
+          rows=$(echo "$json_data" | jq -r '
+            .commits[] |
+            .authors[0].login as $login |
+            .messageHeadline as $message |
+            (if $message | test("#\\d+\\)$") then "#\($message | capture("#(?<pr>\\d+)\\)$").pr)" else "" end) as $pr_number |
+            ($message | sub(" \\(#\\d+\\)$"; "")) as $clean_message |
+            "| \($pr_number) | \($login) | \($clean_message) |"
+          ')
+
+          # Combine header and rows
+          markdown_table=""
+          markdown_table+="$header"$'\n'
+          markdown_table+="$rows"
+
+          # update pr description
+          gh pr edit $pr_number --body "$markdown_table"
+
+          # update branch
+          # gh api -XPUT  repos/rocketlane/rocket-api/pulls/$pr_number/update-branch;
+
+  to_release:
+    name: Create PR from release->master
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/release'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: release
+      - name: Create PR from release->master
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_FROM: release
+          BRANCH_TO: master
+        run: |
+          pr_number=$(gh pr list --base $BRANCH_TO --head $BRANCH_FROM --json number -q '.[0].number')
+          if [ -z "$pr_number" ]; then
+              echo "No Release->Master PR found"
+              gh pr create --base $BRANCH_TO --head $BRANCH_FROM --title "Release -> Master" --body " "
+              pr_number=$(gh pr list --base $BRANCH_TO --head $BRANCH_FROM --json number -q '.[0].number')
+          else
+              echo "Release -> Master is already present"
+          fi
+
+          # gh api -XPUT  repos/rocketlane/rocket-api/pulls/$pr_number/update-branch;
