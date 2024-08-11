@@ -1,0 +1,24 @@
+name: Main check
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - master
+
+#concurrency:
+#  group: ${{ github.head_ref }}
+#  cancel-in-progress: true
+
+jobs:
+  maincheck:
+    name: Main check
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_RUN_ID: ${{ github.run_id }}
+      
+    steps:
+
+
+      - name: Print Text
+        run: |
+          echo "Completed......"
