@@ -10,8 +10,8 @@ if(!(/^\d+$/.test(w)))
 {
 	window.alert("Characters are not allowed in Phone field");
 	return false;
-	//New changes
-	
+	//New changes - 1
+
 }
 }
 function name()
